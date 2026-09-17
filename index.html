@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>符文戰士：街機對決 (199詞完備版)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @keyframes bossFloat {
+      0%, 100% { transform: translateY(0px) scale(1); }
+      50% { transform: translateY(-10px) scale(1.02); }
+    }
+    @keyframes bossHurtAnim {
+      0% { transform: scale(1.2) translate(-8px, 6px); filter: brightness(2.5) drop-shadow(0 0 35px #ef4444); }
+      30% { transform: scale(0.9) translate(8px, -4px); filter: brightness(1.8) drop-shadow(0 0 25px #f59e0b); }
+      100% { transform: scale(1) translate(0, 0); filter: drop-shadow(0 0 15px rgba(239, 68, 68, 0.4)); }
+    }
+    @keyframes bossShieldAnim {
+      0%, 100% { transform: scale(1); filter: drop-shadow(0 0 10px #38bdf8); }
+      50% { transform: scale(1.08); filter: drop-shadow(0 0 35px #38bdf8); }
+    }
+    @keyframes runeGlow {
+      0%, 100% { box-shadow: 0 0 15px rgba(245, 158, 11, 0.2), inset 0 0 15px rgba(245, 158, 11, 0.1); }
+      50% { box-shadow: 0 0 30px rgba(245, 158, 11, 0.5), inset 0 0 25px rgba(245, 158, 11, 0.2); }
+    }
+    @keyframes damagePop {
+      0% { transform: translate(-50%, 0) scale(0.5); opacity: 0; }
+      20% { transform: translate(-50%, -25px) scale(1.4); opacity: 1; }
+      80% { transform: translate(-50%, -55px) scale(1.1); opacity: 1; }
+      100% { transform: translate(-50%, -75px) scale(0.8); opacity: 0; }
+    }
+    @keyframes slashAnim {
+      0% { opacity: 1; transform: translate(-50%, -50%) rotate(var(--rot)) scaleX(0.1) scaleY(2); }
+      40% { opacity: 1; transform: translate(-50%, -50%) rotate(var(--rot)) scaleX(1.3) scaleY(1); }
+      100% { opacity: 0; transform: translate(-50%, -50%) rotate(var(--rot)) scaleX(1.6) scaleY(0.2); }
+    }
+
+    .boss-idle { animation: bossFloat 3.5s ease-in-out infinite; }
+    .boss-hurt { animation: bossHurtAnim 0.45s cubic-bezier(0.36, 0.07, 0.19, 0.97) both; }
+    .boss-shield { animation: bossShieldAnim 0.5s ease-in-out 2; }
+    .rune-box-glow { animation: runeGlow 2.5s infinite; }
+    .damage-fly { animation: damagePop 0.85s cubic-bezier(0.18, 0.89, 0.32, 1.28) forwards; }
+    .slash-effect { animation: slashAnim 0.35s ease-out forwards; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans select-none overflow-x-hidden relative">
+
+  <!-- 背景動態網格與氛圍光暈 -->
+  <div class="fixed inset-0 pointer-events-none overflow-hidden z-0">
+    <div class="absolute -top-32 left-1/2 -translate-x-1/2 w-[550px] h-[550px] bg-red-600/15 rounded-full blur-[120px]"></div>
+    <div class="absolute bottom-0 left-1/2 -translate-x-1/2 w-[600px] h-[350px] bg-amber-500/10 rounded-full blur-[140px]"></div>
+    <div class="absolute inset-0 bg-[linear-gradient(to_right,#1e293b15_1px,transparent_1px),linear-gradient(to_bottom,#1e293b15_1px,transparent_1px)] bg-[size:28px_28px]"></div>
+  </div>
+
+  <!-- 特效粒子畫布 -->
+  <canvas id="fx-canvas" class="fixed inset-0 pointer-events-none z-40"></canvas>
+
+  <!-- 頂部資訊列與 13 關下拉選單 -->
+  <header class="bg-slate-950/80 border-b border-slate-800/80 px-4 py-3 flex items-center justify-between backdrop-blur-md sticky top-0 z-30">
+    <div class="flex items-center gap-2">
+      <div class="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-[0_0_10px_#f59e0b] animate-ping"></div>
+      <h1 class="font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-orange-400 to-red-500 text-lg sm:text-xl font-mono">
+        RUNE BATTLE
+      </h1>
+      <span class="text-[10px] bg-amber-500/10 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded font-mono font-bold">199 WORDS</span>
+    </div>
+    
+    <select id="unit-selector" class="bg-slate-900 text-amber-300 text-xs border border-slate-700/80 rounded-lg px-2.5 py-1.5 outline-none font-bold shadow-inner max-w-[200px] sm:max-w-none truncate">
+      <optgroup label="【考卷一：共 90 題】">
+        <option value="U01">第 01~15 題：交通 ～ 閣樓 (15詞)</option>
+        <option value="U02">第 16~30 題：寒冷 ～ 並且 (15詞)</option>
+        <option value="U03">第 31~45 題：皮袋 ～ 遙遠 (15詞)</option>
+        <option value="U04">第 46~60 題：書本 ～ 對答 (15詞)</option>
+        <option value="U05">第 61~75 題：統一 ～ 順序 (15詞)</option>
+        <option value="U06">第 76~90 題：簡單 ～ 尺寸 (15詞)</option>
+      </optgroup>
+      <optgroup label="【考卷二：共 109 題】">
+        <option value="U07">第 01~15 題：傾聽 ～ 閃光 (15詞)</option>
+        <option value="U08">第 16~30 題：原始 ～ 起來 (15詞)</option>
+        <option value="U09">第 31~45 題：日子 ～ 充電 (15詞)</option>
+        <option value="U10">第 46~60 題：臉盆 ～ 不熟 (15詞)</option>
+        <option value="U11">第 61~75 題：快樂 ～ 冷靜 (15詞)</option>
+        <option value="U12">第 76~92 題：袖子 ～ 計謀 (17詞)</option>
+        <option value="U13">第 93~109 題：原因 ～ 思念 (17詞)</option>
+      </optgroup>
+    </select>
+  </header>
+
+  <!-- 主戰鬥核心區 -->
+  <main class="relative z-10 flex-1 flex flex-col max-w-lg w-full mx-auto p-4 gap-3.5">
+    
+    <!-- 競技場卡片 -->
+    <div id="battle-arena" class="relative bg-gradient-to-b from-slate-900/90 via-slate-900/60 to-slate-950/90 border-2 border-slate-800/80 rounded-3xl p-4 shadow-[0_20px_50px_rgba(0,0,0,0.8)] backdrop-blur-xl flex flex-col items-center overflow-hidden">
+      
+      <!-- 格鬥血條 -->
+      <div class="w-full mb-2 px-1">
+        <div class="flex justify-between items-end mb-1.5 font-mono">
+          <div class="flex items-center gap-2">
+            <span class="text-xs bg-red-950/80 text-red-400 border border-red-800/80 px-2 py-0.5 rounded font-black tracking-widest">BOSS</span>
+            <span id="boss-name" class="font-black text-sm text-slate-200 tracking-wide">機械古鐘魔獸</span>
+          </div>
+          <div class="text-xs font-black text-amber-400 tracking-wider">
+            <span id="boss-hp-current">750</span> <span class="text-slate-500">/</span> <span id="boss-hp-max">750</span> <span class="text-[10px] text-slate-400">HP</span>
+          </div>
+        </div>
+
+        <div class="relative w-full h-4 bg-slate-950 rounded-full overflow-hidden p-0.5 border border-slate-700/80 shadow-inner">
+          <div id="boss-hp-ghost" class="absolute top-0.5 bottom-0.5 left-0.5 bg-amber-200/80 rounded-full transition-all duration-700 ease-out w-full"></div>
+          <div id="boss-hp-bar" class="relative h-full bg-gradient-to-r from-amber-500 via-orange-500 to-red-600 rounded-full transition-all duration-200 ease-out shadow-[0_0_12px_rgba(239,68,68,0.8)] w-full"></div>
+        </div>
+      </div>
+
+      <!-- 動態怪獸 Sprite 舞台 -->
+      <div class="relative w-48 h-48 flex items-center justify-center my-1">
+        <div class="absolute inset-2 border-2 border-dashed border-red-500/20 rounded-full animate-spin [animation-duration:20s] pointer-events-none"></div>
+        <div class="absolute inset-6 border border-amber-500/20 rounded-full animate-ping [animation-duration:4s] pointer-events-none"></div>
+
+        <div id="boss-container" class="relative w-40 h-40 flex items-center justify-center boss-idle">
+          <img id="boss-sprite" src="" alt="Boss Sprite" class="max-w-full max-h-full object-contain filter drop-shadow-[0_10px_25px_rgba(239,68,68,0.5)] transition-all duration-150 select-none pointer-events-none" />
+          <div id="boss-fallback" class="hidden text-8xl select-none filter drop-shadow-[0_10px_25px_rgba(239,68,68,0.5)]">
+            ⏰
+          </div>
+        </div>
+
+        <div id="slash-container" class="absolute inset-0 pointer-events-none overflow-visible"></div>
+        <div id="damage-text" class="absolute left-1/2 top-1/2 font-black italic tracking-tighter opacity-0 pointer-events-none z-30 font-mono"></div>
+      </div>
+
+      <div id="battle-log" class="w-full bg-slate-950/80 border border-slate-800 rounded-xl py-2.5 px-3.5 text-center text-xs sm:text-sm min-h-[42px] flex items-center justify-center text-slate-300 font-medium tracking-wide">
+        請在紙上寫出對應國字，完成後核對答案！
+      </div>
+    </div>
+
+    <!-- 任務指示卡 -->
+    <div class="rune-box-glow bg-gradient-to-b from-slate-900 to-slate-950 border border-amber-500/40 rounded-2xl p-4 shadow-xl flex flex-col gap-2.5">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class="text-amber-400 text-sm">📜</span>
+          <span class="text-xs font-black text-amber-400 uppercase tracking-widest font-mono">Rune Quest</span>
+        </div>
+        <span id="quest-stage" class="text-xs bg-amber-950/60 text-amber-300 border border-amber-700/60 px-2.5 py-0.5 rounded-full font-mono font-bold">1 / 15 詞</span>
+      </div>
+
+      <div class="flex items-center justify-between bg-slate-950/90 p-3 rounded-xl border border-slate-800 shadow-inner">
+        <div class="flex items-baseline gap-2">
+          <span class="text-xs text-slate-500 font-bold uppercase tracking-wider">讀音符文</span>
+          <span id="target-zhuyin" class="text-2xl sm:text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-300 to-yellow-200 tracking-[0.25em] font-mono pl-2">ㄐㄧㄠ ㄊㄨㄥ</span>
+        </div>
+        <span class="text-xs px-2 py-1 rounded bg-slate-900 text-slate-400 border border-slate-800 font-mono">課內語詞</span>
+      </div>
+
+      <div class="text-xs text-slate-300 px-1 leading-relaxed flex items-start gap-1.5">
+        <span class="text-amber-400 font-black shrink-0">💡 線索：</span>
+        <span id="target-clue" class="text-slate-300 font-medium">馬路上人車往來的運行往來。</span>
+      </div>
+    </div>
+
+    <!-- 學生完成按鈕 -->
+    <div id="box-student-action" class="flex flex-col gap-2 pt-1">
+      <button id="btn-reveal-answer" class="w-full py-4 bg-gradient-to-r from-amber-500 via-orange-500 to-red-500 hover:from-amber-400 hover:to-red-400 active:scale-[0.98] text-slate-950 font-black text-base rounded-2xl shadow-[0_0_25px_rgba(245,158,11,0.4)] transition-all flex items-center justify-center gap-2 group">
+        <span class="text-lg group-hover:scale-125 transition-transform">✍️</span>
+        <span class="tracking-wider">我在紙上寫好了！核對符文</span>
+      </button>
+      <p class="text-[11px] text-slate-500 text-center">請在考卷上端正寫出國字後再點擊</p>
+    </div>
+
+    <!-- 老師審查面板（動態多字米字格） -->
+    <div id="box-teacher-review" class="hidden bg-gradient-to-b from-indigo-950/90 to-slate-950/95 border-2 border-indigo-500/60 rounded-2xl p-4 flex flex-col gap-3.5 shadow-2xl backdrop-blur-xl">
+      
+      <div class="flex items-center justify-between border-b border-indigo-800/50 pb-2">
+        <span class="text-xs font-black text-indigo-300 tracking-wider flex items-center gap-1.5">
+          <span>✨</span>
+          <span>標準符文解鎖（請老師核對紙張筆跡）</span>
+        </span>
+        <span class="text-[10px] bg-indigo-900/60 text-indigo-300 border border-indigo-700 px-2 py-0.5 rounded font-mono font-bold">TEACHER JUDGE</span>
+      </div>
+
+      <!-- 動態米字格容器（支援 2~5 字） -->
+      <div id="char-display-box" class="bg-slate-950 border border-indigo-900/80 rounded-xl p-3 flex items-center justify-center gap-2.5 flex-wrap shadow-inner min-h-[90px]"></div>
+
+      <div class="text-xs text-slate-300 bg-slate-900/90 rounded-xl p-2.5 border border-slate-800 leading-relaxed">
+        <span class="text-amber-400 font-bold">🔍 易錯檢查：</span>
+        <span id="target-tip" class="text-slate-300 font-medium">--</span>
+      </div>
+
+      <!-- 裁判按鈕 -->
+      <div class="grid grid-cols-3 gap-2 pt-1">
+        <button id="btn-judge-fail" class="py-3 bg-slate-900 hover:bg-slate-800 text-rose-300 border border-rose-800/80 font-bold text-xs rounded-xl active:scale-95 transition-all flex flex-col items-center justify-center gap-1 shadow-md">
+          <span class="text-base">🛡️</span>
+          <span>筆劃有錯 (防禦)</span>
+        </button>
+
+        <button id="btn-judge-pass" class="py-3 bg-gradient-to-b from-sky-600 to-blue-700 hover:from-sky-500 hover:to-blue-600 text-white font-black text-xs rounded-xl active:scale-95 transition-all flex flex-col items-center justify-center gap-1 shadow-[0_0_15px_rgba(14,165,233,0.4)]">
+          <span class="text-base">⚔️</span>
+          <span>正確擊中 (-50)</span>
+        </button>
+
+        <button id="btn-judge-crit" class="py-3 bg-gradient-to-b from-amber-400 via-orange-500 to-red-600 hover:from-amber-300 hover:to-red-500 text-slate-950 font-black text-xs rounded-xl active:scale-95 transition-all flex flex-col items-center justify-center gap-1 shadow-[0_0_20px_rgba(245,158,11,0.6)]">
+          <span class="text-base">💥</span>
+          <span>工整暴擊 (-80)</span>
+        </button>
+      </div>
+
+    </div>
+
+  </main>
+
+  <script>
+    /* 1. 音效引擎 */
+    class SoundEngine {
+      constructor() { this.ctx = null; }
+      init() { if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); }
+      playSlash() {
+        this.init();
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(600, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(100, this.ctx.currentTime + 0.12);
+        gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.12);
+        osc.connect(gain); gain.connect(this.ctx.destination);
+        osc.start(); osc.stop(this.ctx.currentTime + 0.12);
+      }
+      playHit(isCrit = false) {
+        this.init();
+        this.playSlash();
+        setTimeout(() => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = isCrit ? 'square' : 'triangle';
+          osc.frequency.setValueAtTime(isCrit ? 180 : 130, this.ctx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(30, this.ctx.currentTime + (isCrit ? 0.4 : 0.25));
+          gain.gain.setValueAtTime(isCrit ? 0.7 : 0.45, this.ctx.currentTime);
+          gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + (isCrit ? 0.4 : 0.25));
+          osc.connect(gain); gain.connect(this.ctx.destination);
+          osc.start(); osc.stop(this.ctx.currentTime + (isCrit ? 0.4 : 0.25));
+        }, 50);
+      }
+      playShield() {
+        this.init();
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(380, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(150, this.ctx.currentTime + 0.25);
+        gain.gain.setValueAtTime(0.4, this.ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.25);
+        osc.connect(gain); gain.connect(this.ctx.destination);
+        osc.start(); osc.stop(this.ctx.currentTime + 0.25);
+      }
+      playVictory() {
+        this.init();
+        const chord = [261.63, 329.63, 392.00, 523.25, 659.25];
+        chord.forEach((freq, idx) => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.value = freq;
+          gain.gain.setValueAtTime(0.2, this.ctx.currentTime + idx * 0.09);
+          gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + idx * 0.09 + 0.35);
+          osc.connect(gain); gain.connect(this.ctx.destination);
+          osc.start(this.ctx.currentTime + idx * 0.09);
+          osc.stop(this.ctx.currentTime + idx * 0.09 + 0.35);
+        });
+      }
+    }
+    const audio = new SoundEngine();
+
+    /* 2. 粒子特效引擎 */
+    const fxCanvas = document.getElementById("fx-canvas");
+    const fxCtx = fxCanvas.getContext("2d");
+    let particles = [];
+    function resizeFx() { fxCanvas.width = window.innerWidth; fxCanvas.height = window.innerHeight; }
+    window.addEventListener("resize", resizeFx);
+    resizeFx();
+
+    class Particle {
+      constructor(x, y, isCrit) {
+        this.x = x; this.y = y;
+        const angle = Math.random() * Math.PI * 2;
+        const speed = isCrit ? (Math.random() * 9 + 4) : (Math.random() * 6 + 2);
+        this.vx = Math.cos(angle) * speed;
+        this.vy = Math.sin(angle) * speed;
+        this.size = isCrit ? (Math.random() * 6 + 3) : (Math.random() * 4 + 2);
+        this.alpha = 1;
+        this.decay = Math.random() * 0.03 + 0.02;
+        this.color = isCrit ? ["#fbbf24", "#f59e0b", "#ef4444", "#ffffff"][Math.floor(Math.random()*4)] : ["#38bdf8", "#818cf8", "#e0e7ff"][Math.floor(Math.random()*3)];
+      }
+      update() { this.x += this.vx; this.y += this.vy; this.vy += 0.15; this.alpha -= this.decay; }
+      draw(ctx) {
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, this.alpha);
+        ctx.fillStyle = this.color;
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+    function spawnParticles(x, y, count = 35, isCrit = false) {
+      for (let i = 0; i < count; i++) particles.push(new Particle(x, y, isCrit));
+    }
+    function animateParticles() {
+      fxCtx.clearRect(0, 0, fxCanvas.width, fxCanvas.height);
+      particles = particles.filter(p => p.alpha > 0);
+      particles.forEach(p => { p.update(); p.draw(fxCtx); });
+      requestAnimationFrame(animateParticles);
+    }
+    animateParticles();
+
+    /* 3. 199 詞題庫完整定義 */
+    const UNITS = {
+      // =====【考卷一：共 90 題】=====
+      "U01": {
+        bossName: "機械古鐘魔獸",
+        maxHp: 750,
+        fallbackIcon: "⏰",
+        sprites: { idle: "assets/clock_idle.png", hurt: "assets/clock_idle.png", shield: "assets/clock_idle.png" },
+        words: [
+          { text: "交通", zhuyin: "ㄐㄧㄠ ㄊㄨㄥ", clue: "馬路上人車往來的運行往來。", tip: "「交」六字頭；「通」辵部加甬。" },
+          { text: "容易", zhuyin: "ㄖㄨㄥˊ ㄧˋ", clue: "做起來很輕鬆、一點都不困難。", tip: "「容」是穴部；「易」上日下勿，小心別多加點！" },
+          { text: "漂亮", zhuyin: "ㄆㄧㄠˋ ㄌㄧㄤˋ", clue: "外觀精緻美麗，讓人看了心情很好。", tip: "「漂」三點水加票；「亮」高字頭（亠口），下為儿。" },
+          { text: "清楚", zhuyin: "ㄑㄧㄥ ㄔㄨˇ", clue: "看得明白、聽得透徹，毫無疑惑。", tip: "「清」三點水；「楚」雙木林下為疋。" },
+          { text: "作業", zhuyin: "ㄗㄨㄛˋ ㄧㄝˋ", clue: "放學後必須在書桌前完成的課業任務。", tip: "「作」人字旁；「業」注意對稱橫劃與豎筆順序。" },
+          { text: "標準", zhuyin: "ㄅㄧㄠ ㄓㄨㄣˇ", clue: "衡量事物好壞的公認尺度與規範。", tip: "「標」木字旁加票；「準」左邊是兩點水。" },
+          { text: "停止", zhuyin: "ㄊㄧㄥˊ ㄓˇ", clue: "不再繼續動作、原地靜止不動。", tip: "「停」人字旁；「止」最後一橫平穩封口。" },
+          { text: "提醒", zhuyin: "ㄊㄧˊ ㄒㄧㄥˇ", clue: "告訴別人需要注意的事，避免忘記。", tip: "「提」右為是；「醒」左邊酉字旁不能漏橫！" },
+          { text: "排列", zhuyin: "ㄆㄞˊ ㄌㄧㄝˋ", clue: "把散亂的東西按照規律一個接一個排好。", tip: "「排」提手旁；「列」左歹右刀。" },
+          { text: "公車", zhuyin: "ㄍㄨㄥ ㄔㄜ", clue: "路上載著許多乘客的大型客運車。", tip: "「公」上面是八不是人；「車」注意橫豎穿插順序。" },
+          { text: "還要", zhuyin: "ㄏㄞˊ ㄧㄠˋ", clue: "除了眼前的東西之外，額外還需要更多。", tip: "「還」辵部加睘，筆劃繁多寫清楚；「要」上西下女。" },
+          { text: "鬧鐘", zhuyin: "ㄋㄠˋ ㄓㄨㄥ", clue: "早晨發出巨大聲響叫你起床的道具。", tip: "「鬧」門部包市；「鐘」左金右童。" },
+          { text: "彩排", zhuyin: "ㄘㄞˇ ㄆㄞˊ", clue: "正式上台表演前的最後實戰演練。", tip: "「彩」左邊是采，右邊是三撇（彡）。" },
+          { text: "水滴", zhuyin: "ㄕㄨㄟˇ ㄉㄧ", clue: "從屋簷或葉片滴落的一小顆水珠。", tip: "「滴」右邊商的內部是古不是口。" },
+          { text: "閣樓", zhuyin: "ㄍㄜˊ ㄌㄡˊ", clue: "房屋最頂端屋頂下方的小儲藏空間。", tip: "「閣」門部包各；「樓」左木右婁。" }
+        ]
+      },
+      "U02": {
+        bossName: "極凍冰魄魔",
+        maxHp: 750,
+        fallbackIcon: "❄️",
+        sprites: { idle: "assets/frozen_demon_idle.png", hurt: "assets/frozen_demon_idle.png", shield: "assets/frozen_demon_idle.png" },
+        words: [
+          { text: "寒冷", zhuyin: "ㄏㄢˊ ㄌㄥˇ", clue: "氣溫降到零下、讓人發抖的感覺。", tip: "「寒」下半部是兩點水，千萬別寫成木！" },
+          { text: "計時", zhuyin: "ㄐㄧˋ ㄕˊ", clue: "用手錶或碼錶計算花費的時間。", tip: "「計」言字旁加十；「時」日字旁加寺。" },
+          { text: "冰箱", zhuyin: "ㄅㄧㄥ ㄒㄧㄤ", clue: "廚房用來低溫保鮮食物的電器。", tip: "「冰」是兩點水；「箱」竹字頭加相。" },
+          { text: "原來", zhuyin: "ㄩㄢˊ ㄌㄞˊ", clue: "終於明白事情真相的那一刻。", tip: "「原」厂部加泉的變體，上方是一撇！" },
+          { text: "因此", zhuyin: "ㄧㄣ ㄘˇ", clue: "因為這個原因，所以導致後面結果。", tip: "「此」左止右匕，注意筆順。" },
+          { text: "受傷", zhuyin: "ㄕㄡˋ ㄕㄤ", clue: "身體擦撞破皮流血、感到疼痛。", tip: "「受」爪字頭加又；「傷」人字旁加昜。" },
+          { text: "應該", zhuyin: "ㄧㄥ ㄍㄞ", clue: "理所當然或按照道理必須這樣做。", tip: "「應」廣字頭加䧹；「該」言字旁加亥。" },
+          { text: "時候", zhuyin: "ㄕˊ ㄏㄡˋ", clue: "指特定的時間段或某一刻。", tip: "「候」中間有一根豎（丨），不要漏掉！" },
+          { text: "靈活", zhuyin: "ㄌㄧㄥˊ ㄏㄨㄛˊ", clue: "動作敏捷迅速，頭腦反應很快。", tip: "「靈」雨字頭加三個口加巫；「活」三點水加舌。" },
+          { text: "隔天", zhuyin: "ㄍㄜˊ ㄊㄧㄢ", clue: "到了第二天的早晨。", tip: "「隔」左阜部（阝），右為鬲。" },
+          { text: "蝸牛", zhuyin: "ㄍㄨㄚ ㄋㄧㄡˊ", clue: "背著螺旋外殼、爬得很慢的小動物。", tip: "「蝸」虫部加咼；「牛」豎劃筆直挺立。" },
+          { text: "水珠", zhuyin: "ㄕㄨㄟˇ ㄓㄨ", clue: "凝結在葉片或玻璃上的圓圓水點。", tip: "「珠」玉字旁加朱。" },
+          { text: "匆忙", zhuyin: "ㄘㄨㄥ ㄇㄤˊ", clue: "時間快來不及、手忙腳亂的樣子。", tip: "「匆」中間有一點，粗心最常漏寫！" },
+          { text: "三角形", zhuyin: "ㄙㄢ ㄐㄧㄠˇ ㄒㄧㄥˊ", clue: "由三條直線段封閉組成的圖形。", tip: "「角」刀字頭加土；「形」右側為三撇。" },
+          { text: "並且", zhuyin: "ㄅㄧㄥˋ ㄑㄧㄝˇ", clue: "連接兩件事，表示同時兼具。", tip: "「並」注意兩豎挑；「且」內為兩橫。" }
+        ]
+      },
+      "U03": {
+        bossName: "幻影因果法師",
+        maxHp: 750,
+        fallbackIcon: "🔮",
+        sprites: { idle: "assets/clock_idle.png", hurt: "assets/clock_idle.png", shield: "assets/clock_idle.png" },
+        words: [
+          { text: "皮袋", zhuyin: "ㄆㄧˊ ㄉㄞˋ", clue: "用動物皮革做成的裝物袋子。", tip: "「袋」代字下方加衣，代不要多寫撇。" },
+          { text: "然而", zhuyin: "ㄖㄢˊ ㄦˊ", clue: "轉折連接詞，表示但是、可是。", tip: "「然」左上月、右上犬、下四點火。" },
+          { text: "牠們", zhuyin: "ㄊㄚ ˙ㄇㄣ", clue: "稱呼多隻動物群體的代詞。", tip: "「牠」是牛字旁，專屬於動物界！" },
+          { text: "它的", zhuyin: "ㄊㄚ ˙ㄉㄜ", clue: "稱呼無生命物品的代名詞。", tip: "「它」是宝蓋頭加匕，不要寫成人字旁。" },
+          { text: "雙簧", zhuyin: "ㄕㄨㄤ ㄏㄨㄤˊ", clue: "一人在後出聲、一人在前表演動作。", tip: "「雙」上為兩個隹；「簧」竹字頭加黃。" },
+          { text: "整理", zhuyin: "ㄓㄥˇ ㄌㄧˇ", clue: "把散亂一地的物品收拾乾淨整齊。", tip: "「整」上為束與攴，下為正。" },
+          { text: "間隔", zhuyin: "ㄐㄧㄢ ㄍㄜˊ", clue: "事物或時間之間的距離與空隙。", tip: "「間」門部中是日不是月；「隔」左阝右鬲。" },
+          { text: "顯示", zhuyin: "ㄒㄧㄢˇ ㄕˋ", clue: "在螢幕或表面明顯呈現出來。", tip: "「顯」日加絲（省）加頁；「示」上兩橫下小。" },
+          { text: "寸步難行", zhuyin: "ㄘㄨㄣˋ ㄅㄨˋ ㄋㄢˊ ㄒㄧㄥˊ", clue: "連走一步都非常困難，陷入困境。", tip: "「步」下方是止的變形，別寫成「少」！" },
+          { text: "呼喊", zhuyin: "ㄏㄨ ㄏㄢˇ", clue: "拉開喉嚨大聲叫喊求援。", tip: "「呼」口字旁加乎；「喊」口字旁加咸。" },
+          { text: "次序", zhuyin: "ㄘˋ ㄒㄩˋ", clue: "事物排列安排的先後地位順序。", tip: "「次」左為兩點水（冫）；「序」廣字頭加予。" },
+          { text: "飛翔", zhuyin: "ㄈㄟ ㄒㄧㄤˊ", clue: "鳥兒張開翅膀在天空盤旋滑行。", tip: "「翔」左羊右羽，羊字底橫不出頭。" },
+          { text: "紙張", zhuyin: "ㄓˇ ㄓㄤ", clue: "用來寫字畫畫的白色薄片。", tip: "「紙」右邊是氏，下方不要加點！" },
+          { text: "且慢", zhuyin: "ㄑㄧㄝˇ ㄇㄢˋ", clue: "先停一下腳步，不要急著行動。", tip: "「慢」心字旁，右側中間是四不是網。" },
+          { text: "遙遠", zhuyin: "ㄧㄠˊ ㄩㄢˇ", clue: "距離很長、看不到終點。", tip: "「遙」辵部加䍃；「遠」辵部加袁。" }
+        ]
+      },
+      "U04": {
+        bossName: "巨錘鍛造傀儡",
+        maxHp: 750,
+        fallbackIcon: "⚙️",
+        sprites: { idle: "assets/clock_idle.png", hurt: "assets/clock_idle.png", shield: "assets/clock_idle.png" },
+        words: [
+          { text: "書本", zhuyin: "ㄕㄨ ㄅㄣˇ", clue: "裝訂成冊、印滿字與圖畫的讀物。", tip: "「書」橫劃等距；「本」木字加一橫指事符號。" },
+          { text: "果然", zhuyin: "ㄍㄨㄛˇ ㄖㄢˊ", clue: "事情的發展完全如預期一樣。", tip: "「果」上方是日，中間直豎貫穿田底。" },
+          { text: "天空", zhuyin: "ㄊㄧㄢ ㄎㄨㄥ", clue: "抬頭所見無邊無際的藍色穹蒼。", tip: "「空」上面是穴字頭不是宝蓋頭！" },
+          { text: "工具", zhuyin: "ㄍㄨㄥ ㄐㄩˋ", clue: "修理機械或製造物品的器材。", tip: "「具」裡面是三橫，小心別少寫一橫！" },
+          { text: "痛苦", zhuyin: "ㄊㄨㄥˋ ㄎㄨˇ", clue: "身體受傷或心裡難受到極點。", tip: "「痛」疒字旁加甬；「苦」草字頭加古。" },
+          { text: "狀況", zhuyin: "ㄓㄨㄤˋ ㄎㄨㄤˋ", clue: "眼前突發出現的情形或局面。", tip: "「狀」左爿右犬；「況」左邊是兩點水！" },
+          { text: "剩餘", zhuyin: "ㄕㄥˋ ㄩˊ", clue: "在全部用完之後留下來的部分。", tip: "「剩」左乘右刂；「餘」食字旁加余。" },
+          { text: "三角", zhuyin: "ㄙㄢ ㄐㄧㄠˇ", clue: "擁有三個銳角或邊角的幾何形狀。", tip: "「角」刀字頭包土。" },
+          { text: "明顯", zhuyin: "ㄇㄧㄥˊ ㄒㄧㄢˇ", clue: "特徵非常突出，大家一眼就看得出。", tip: "「明」日加月；「顯」下半部為頁字底。" },
+          { text: "便當", zhuyin: "ㄅㄧㄢˋ ㄉㄤ", clue: "肚子餓時打開吃的飯菜餐盒。", tip: "「便」人字旁加更；「當」上尚下田。" },
+          { text: "道路", zhuyin: "ㄉㄠˋ ㄌㄨˋ", clue: "給行人與車輛行走的長長路面。", tip: "「道」辵部加首；「路」足字旁加各。" },
+          { text: "設備", zhuyin: "ㄕㄜˋ ㄅㄟˋ", clue: "具有特定功能的大型整套器材。", tip: "「設」言字旁加殳；「備」注意上半部結構。" },
+          { text: "耳蝸", zhuyin: "ㄦˇ ㄨㄛ", clue: "內耳中掌管聽覺、形似蝸牛的構造。", tip: "「蝸」此處讀作ㄨㄛ，右邊為咼。" },
+          { text: "奔跑", zhuyin: "ㄅㄣ ㄆㄠˇ", clue: "邁開大步急速在路上前進。", tip: "「奔」大字下為十、廾；「跑」足字旁加包。" },
+          { text: "對答", zhuyin: "ㄉㄨㄟˋ ㄉㄚˊ", clue: "你問我答，流暢地回答問題。", tip: "「對」左業省右寸；「答」竹字頭加合。" }
+        ]
+      },
+      "U05": {
+        bossName: "秩序石碑守衛",
+        maxHp: 750,
+        fallbackIcon: "📜",
+        sprites: { idle: "assets/clock_idle.png", hurt: "assets/clock_idle.png", shield: "assets/clock_idle.png" },
+        words: [
+          { text: "統一", zhuyin: "ㄊㄨㄥˇ ㄧ", clue: "歸納整合成一致的規定或標準。", tip: "「統」糸部加充；「一」保持水平。" },
+          { text: "時間", zhuyin: "ㄕˊ ㄐㄧㄢ", clue: "一分一秒流動的時間度量。", tip: "「間」門字框內是「日」不是「月」！" },
+          { text: "匆促", zhuyin: "ㄘㄨㄥ ㄘㄨˋ", clue: "時間倉促緊迫，動作很急燥。", tip: "「促」人字旁加足，表示腳步急忙。" },
+          { text: "忙碌", zhuyin: "ㄇㄤˊ ㄌㄨˋ", clue: "事情一件接一件做，停不下來。", tip: "「碌」是石字旁加彔，別寫成水字旁！" },
+          { text: "口簧", zhuyin: "ㄎㄡˇ ㄏㄨㄤˊ", clue: "原住民口中吹奏震動的傳統樂器。", tip: "「簧」竹字頭加黃。" },
+          { text: "永久", zhuyin: "ㄩㄥˇ ㄐㄧㄡˇ", clue: "永遠持續下去，絕不改變磨滅。", tip: "「永」點橫折鉤橫撇捺；「久」撇捺平穩。" },
+          { text: "門票", zhuyin: "ㄇㄣˊ ㄆㄧㄠˋ", clue: "進入展場或樂園的入場證件。", tip: "「票」上方是襾，下方為示。" },
+          { text: "箱子", zhuyin: "ㄒㄧㄤ ˙ㄗ", clue: "有蓋子可以裝收物品的方形容器。", tip: "「箱」是竹字頭加相。" },
+          { text: "慢慢", zhuyin: "ㄇㄢˋ ㄇㄢˋ", clue: "腳步放慢、不慌不忙的樣子。", tip: "「慢」心字旁，右為日、四、又。" },
+          { text: "有餘", zhuyin: "ㄧㄡˇ ㄩˊ", clue: "數量足夠充足，甚至還多出來。", tip: "「餘」食字旁加余。" },
+          { text: "便利", zhuyin: "ㄅㄧㄢˋ ㄌㄧˋ", clue: "操作省事方便、省時又順暢。", tip: "「利」禾字旁加刀。" },
+          { text: "感覺", zhuyin: "ㄍㄢˇ ㄐㄧㄠˊ", clue: "心裡或感官體驗到的情緒與知覺。", tip: "「感」心字底；「覺」上學頭下見。" },
+          { text: "情況", zhuyin: "ㄑㄧㄥˊ ㄎㄨㄤˋ", clue: "事情處於的實際狀態與進展。", tip: "「情」心字旁加青；「況」左邊為兩點水！" },
+          { text: "排隊", zhuyin: "ㄆㄞˊ ㄉㄨㄟˋ", clue: "大家一個排一個依照順序站好。", tip: "「隊」左阜部（阝），右為㒸。" },
+          { text: "順序", zhuyin: "ㄕㄨㄣˋ ㄒㄩˋ", clue: "事情進行的先後步驟，不能搞亂。", tip: "「順」左川右頁；「序」廣字頭加予。" }
+        ]
+      },
+      "U06": {
+        bossName: "鋼鐵要塞騎士",
+        maxHp: 750,
+        fallbackIcon: "🛡️",
+        sprites: { idle: "assets/clock_idle.png", hurt: "assets/clock_idle.png", shield: "assets/clock_idle.png" },
+        words: [
+          { text: "簡單", zhuyin: "ㄐㄧㄢˇ ㄉㄢ", clue: "一點都不複雜、做起來很輕鬆。", tip: "「簡」竹字頭加間；「單」上倒八、田中兩橫、下一橫豎。" },
+          { text: "吞食", zhuyin: "ㄊㄨㄣ ㄕˊ", clue: "不用嚼爛、一口氣吞進肚子裡。", tip: "「吞」上天下口；「食」人良結構。" },
+          { text: "黑板", zhuyin: "ㄏㄟ ㄅㄢˇ", clue: "教室前方用粉筆在上面寫字的板子。", tip: "「黑」里字下四點火；「板」木字旁加反。" },
+          { text: "作客", zhuyin: "ㄗㄨㄛˋ ㄎㄜˋ", clue: "到別人家裡受到熱情款待當客人。", tip: "「客」宝蓋頭加各。" },
+          { text: "等待", zhuyin: "ㄉㄥˇ ㄉㄞˋ", clue: "耐心停留在原地等某件事發生。", tip: "「等」竹字頭加寺；「待」雙人旁加寺。" },
+          { text: "信用", zhuyin: "ㄒㄧㄣˋ ㄩㄥˋ", clue: "誠實遵守諾言、受到大家信賴。", tip: "「信」人言為信；「用」月字中貫穿一豎。" },
+          { text: "跳躍", zhuyin: "ㄊㄧㄠˋ ㄩㄝˋ", clue: "雙腳用力蹬離地面跳到空中。", tip: "「躍」足字旁加翟。" },
+          { text: "條件", zhuyin: "ㄊㄧㄠˊ ㄐㄧㄢˋ", clue: "達成某個目標所必須具備的要求。", tip: "「條」木字底加條字頭；「件」人字旁加牛。" },
+          { text: "文具", zhuyin: "ㄨㄣˊ ㄐㄩˋ", clue: "鉛筆、橡皮擦、尺等上課用具。", tip: "「具」內部是三橫，小心別少寫一橫！" },
+          { text: "大概", zhuyin: "ㄉㄚˋ ㄍㄞˋ", clue: "推算的大約情形，八九不離十。", tip: "「概」木字旁加既。" },
+          { text: "縮小", zhuyin: "ㄙㄨㄛ ㄒㄧㄠˇ", clue: "體積由原本的大尺寸收縮變小。", tip: "「縮」糸部加宿。" },
+          { text: "勞累", zhuyin: "ㄌㄠˊ ㄌㄟˋ", clue: "運動或做完苦工後全身疲憊想睡。", tip: "「勞」上兩個火加冖加力；「累」上田下糸。" },
+          { text: "有效", zhuyin: "ㄧㄡˇ ㄒㄧㄠˋ", clue: "發揮了預期的作用、完全有成果。", tip: "「效」左交右攵（反文旁）。" },
+          { text: "安靜", zhuyin: "ㄢ ㄐㄧㄥˋ", clue: "沒有任何噪音、四周鴉雀無聲。", tip: "「靜」左青右爭。" },
+          { text: "尺寸", zhuyin: "ㄔˇ ㄘㄨㄣˋ", clue: "長度與大小的量度規範。", tip: "「尺」尸字撇出捺；「寸」一橫加豎鉤點。" }
+        ]
+      },
+
+      // =====【考卷二：共 109 題】=====
+      "U07": {
+        bossName: "音波幻影蝠",
+        maxHp: 750,
+        fallbackIcon: "🦇",
+        sprites: { idle: "assets/clock_idle.png", hurt: "assets/clock_idle.png", shield: "assets/clock_idle.png" },
+        words: [
+          { text: "傾聽", zhuyin: "ㄑㄧㄥ ㄊㄧㄥ", clue: "側過耳朵專心聆聽別人說話。", tip: "「傾」人字旁加頃；「聽」耳部加聽右旁。" },
+          { text: "禮讓", zhuyin: "ㄌㄧˇ ㄖㄤˋ", clue: "有禮貌地主動讓位給老人或孕婦。", tip: "「禮」示字旁加豊；「讓」言字旁加襄。" },
+          { text: "彩帶", zhuyin: "ㄘㄞˇ ㄉㄞˋ", clue: "慶典活動拋向空中慶祝的彩色長條帶。", tip: "「彩」采加彡；「帶」上帶頭中冖下巾。" },
+          { text: "計畫", zhuyin: "ㄐㄧˋ ㄏㄨㄚˋ", clue: "在事前訂定周詳詳細的執行步驟。", tip: "「畫」聿部包田加一橫。" },
+          { text: "來往", zhuyin: "ㄌㄞˊ ㄨㄤˇ", clue: "路上行人與車輛互相穿梭走動。", tip: "「往」雙人旁（彳）加主。" },
+          { text: "電腦", zhuyin: "ㄉㄧㄢˋ ㄋㄠˇ", clue: "放在書桌前運算查資料的電子螢幕主機。", tip: "「腦」肉月旁加腦右部。" },
+          { text: "天氣", zhuyin: "ㄊㄧㄢ ㄑㄧˋ", clue: "今天外面是晴天、陰天還是下雨天。", tip: "「氣」气字底加米。" },
+          { text: "衣袖", zhuyin: "ㄧ ㄒㄧㄡˋ", clue: "上衣穿過雙臂延伸出來的部分。", tip: "「袖」是衣字旁（衤）不是示字旁！" },
+          { text: "喜歡", zhuyin: "ㄒㄧˇ ㄏㄨㄢ", clue: "內心非常中意、很愛這個東西。", tip: "「喜」吉加豆；「歡」雚加欠。" },
+          { text: "後悔", zhuyin: "ㄏㄡˋ ㄏㄨㄟˇ", clue: "做錯事後心裡懊惱覺得不該這樣做。", tip: "「悔」心字旁加每。" },
+          { text: "出現", zhuyin: "ㄔㄨ ㄒㄧㄢˋ", clue: "從隱藏的地方顯露出來被看見。", tip: "「現」王字旁加見。" },
+          { text: "烏黑", zhuyin: "ㄨ ㄏㄟ", clue: "像烏鴉羽毛一樣深沉發亮的黑色。", tip: "「烏」鳥字少中間一橫！" },
+          { text: "好奇", zhuyin: "ㄏㄠˋ ㄑㄧˊ", clue: "對新鮮的事物感到很有興趣想追查。", tip: "「好」女加子；「奇」大加可。" },
+          { text: "最好", zhuyin: "ㄗㄨㄟˋ ㄏㄠˇ", clue: "在所有選項中排行第一、沒有比它更棒。", tip: "「最」曰加取。" },
+          { text: "閃光", zhuyin: "ㄕㄢˇ ㄍㄨㄤ", clue: "黑暗中瞬間發出刺眼耀眼的強烈光芒。", tip: "「閃」門部中間藏人！" }
+        ]
+      },
+      "U08": {
+        bossName: "風暴破壞巨怪",
+        maxHp: 750,
+        fallbackIcon: "🌪️",
+        sprites: { idle: "assets/clock_idle.png", hurt: "assets/clock_idle.png", shield: "assets/clock_idle.png" },
+        words: [
+          { text: "原始", zhuyin: "ㄩㄢˊ ㄕˇ", clue: "最一開始、未經人為改變的最初模樣。", tip: "「始」女字旁加台。" },
+          { text: "技師", zhuyin: "ㄐㄧˋ ㄕ", clue: "擁有專業技術、負責維修精密機器的師傅。", tip: "「技」手字旁加支；「師」左阜右匝。" },
+          { text: "傾盆大雨", zhuyin: "ㄑㄧㄥ ㄆㄣˊ ㄉㄚˋ ㄩˇ", clue: "雨下得像整盆水從天上倒下來一樣劇烈。", tip: "「盆」分字底加皿。" },
+          { text: "等候", zhuyin: "ㄉㄥˇ ㄏㄡˋ", clue: "在車站月台安靜等待公車開進來。", tip: "「候」中間有直豎（丨）！" },
+          { text: "困難", zhuyin: "ㄎㄨㄣˋ ㄋㄢˊ", clue: "不容易完成、路上佈滿阻礙。", tip: "「困」口包木；「難」又加隹。" },
+          { text: "辦法", zhuyin: "ㄅㄢˋ ㄈㄚˇ", clue: "處理棘手難題所想出來的妙計解法。", tip: "「辦」辛部中間是力！" },
+          { text: "發生", zhuyin: "ㄈㄚ ㄕㄥ", clue: "某件事情真實出現並展開了。", tip: "「發」癶字頭加弓殳。" },
+          { text: "旋律", zhuyin: "ㄒㄩㄢˊ ㄌㄩˋ", clue: "音樂高低起伏、動聽和諧的曲調節奏。", tip: "「旋」方字旁加疋變形；「律」彳加聿。" },
+          { text: "更改", zhuyin: "ㄍㄥ ㄍㄞˇ", clue: "把原本寫錯或不對的地方修改過來。", tip: "「更」曰加乂；「改」己加攵。" },
+          { text: "一切", zhuyin: "ㄧ ㄑㄧㄝˋ", clue: "全部的所有事物，毫無遺漏保留。", tip: "「切」七加刀。" },
+          { text: "超越", zhuyin: "ㄔㄠ ㄩㄝˋ", clue: "加速跑過前方的對手、突破極限。", tip: "「超」走字旁加召；「越」走字旁加戉。" },
+          { text: "怎樣", zhuyin: "ㄗㄣˇ ㄧㄤˋ", clue: "詢問情形或手段的疑問口氣。", tip: "「怎」乍加心；「樣」木加羕。" },
+          { text: "抹布", zhuyin: "ㄇㄚ ㄅㄨˋ", clue: "擦拭桌面油漬髒污所使用的方布。", tip: "「抹」提手旁加末，上橫長下橫短！" },
+          { text: "變成", zhuyin: "ㄅㄧㄢˋ ㄔㄥˊ", clue: "經歷轉換過程後成為了另一種型態。", tip: "「成」戊加折筆。" },
+          { text: "起來", zhuyin: "ㄑㄧˇ ㄌㄞˊ", clue: "從床上起身坐好，或者動作開始。", tip: "「起」走加己。" }
+        ]
+      },
+      "U09": {
+        bossName: "穿山裂石獸",
+        maxHp: 750,
+        fallbackIcon: "🐾",
+        sprites: { idle: "assets/clock_idle.png", hurt: "assets/clock_idle.png", shield: "assets/clock_idle.png" },
+        words: [
+          { text: "日子", zhuyin: "ㄖˋ ˙ㄗ", clue: "一天又一天的時光生活歲月。", tip: "「日」外框方正；「子」注意橫撇順序。" },
+          { text: "新生", zhuyin: "ㄒㄧㄣ ㄕㄥ", clue: "剛出生的小生命，或剛入學的新同學。", tip: "「新」立加木加斤。" },
+          { text: "滿意", zhuyin: "ㄇㄢˇ ㄧˋ", clue: "成果完全符合心意、感到非常高興讚賞。", tip: "「滿」水部加廿兩；「意」音加心。" },
+          { text: "穿山甲", zhuyin: "ㄔㄨㄢ ㄕㄢ ㄐㄧㄚˇ", clue: "全身披滿鱗甲、遇到危險縮成球狀的保育動物。", tip: "「穿」穴加牙；「甲」日字貫穿到底！" },
+          { text: "正方形", zhuyin: "ㄓㄥˋ ㄈㄤ ㄒㄧㄥˊ", clue: "四個邊等長且具備四個直角的規則幾何圖形。", tip: "「正」一加止；「形」右側三撇。" },
+          { text: "國家", zhuyin: "ㄍㄨㄛˊ ㄐㄧㄚ", clue: "擁有土地、人民與政府的共同體。", tip: "「國」口部包或；「家」宝蓋頭包豕。" },
+          { text: "辦法", zhuyin: "ㄅㄢˋ ㄈㄚˇ", clue: "解決問題的策略方法。", tip: "「辦」中間是「力」不是「言」！" },
+          { text: "足夠", zhuyin: "ㄗㄨˊ ㄍㄡˋ", clue: "數量份量完全充足，不再感到短缺。", tip: "「夠」句加多。" },
+          { text: "溫暖的風", zhuyin: "ㄨㄣ ㄋㄨㄢˇ ˙ㄉㄜ ㄈㄥ", clue: "春天吹拂在臉頰上舒服柔和的微風。", tip: "「溫」三點水；「暖」日加爰；「風」几包虫。" },
+          { text: "掛衣服", zhuyin: "ㄍㄨㄚˋ ㄧ ㄈㄨˊ", clue: "洗完衣服後用衣架掛上曬衣繩。", tip: "「掛」提手旁加圭；「服」月加卩又。" },
+          { text: "數學", zhuyin: "ㄕㄨˋ ㄒㄩㄝˊ", clue: "計算加減乘除與幾何邏輯的理科科目。", tip: "「數」米女加攵；「學」爻字頭加子。" },
+          { text: "過去", zhuyin: "ㄍㄨㄛˋ ㄑㄩˋ", clue: "已經走過的時間，不再回頭的歷史歲月。", tip: "「過」辵部加咼；「去」土加厶。" },
+          { text: "領先", zhuyin: "ㄌㄧㄥˇ ㄒㄧㄢ", clue: "在跑步比賽中超越眾人跑在最前鋒。", tip: "「領」令加頁；「先」牛頭人底。" },
+          { text: "期待", zhuyin: "ㄑㄧˊ ㄉㄞˋ", clue: "滿懷希望盼望某件好事趕快來到。", tip: "「期」其加月；「待」雙人旁加寺。" },
+          { text: "充電", zhuyin: "ㄔㄨㄥ ㄉㄧㄢˋ", clue: "插上電線替平板或手機補充能量。", tip: "「充」亠加允；「電」雨字頭加申尾勾。" }
+        ]
+      },
+      "U10": {
+        bossName: "晨曦光明獅",
+        maxHp: 750,
+        fallbackIcon: "🦁",
+        sprites: { idle: "assets/clock_idle.png", hurt: "assets/clock_idle.png", shield: "assets/clock_idle.png" },
+        words: [
+          { text: "臉盆", zhuyin: "ㄌㄧㄢˇ ㄆㄣˊ", clue: "早晨裝滿清水用來洗臉的圓形器皿。", tip: "「臉」肉月旁加僉；「盆」分加皿。" },
+          { text: "緊張", zhuyin: "ㄐㄧㄣˇ ㄓㄤ", clue: "站上舞台表演前心跳加速的發抖情緒。", tip: "「緊」臤加糸；「張」弓加長。" },
+          { text: "呆坐", zhuyin: "ㄉㄞ ㄗㄨㄛˋ", clue: "兩眼發愣坐在椅子上一動也不動。", tip: "「呆」口加木；「坐」二人坐土上。" },
+          { text: "習慣", zhuyin: "ㄒㄧˊ ㄍㄨㄢˋ", clue: "長久以來常常重複養成的一種行為模式。", tip: "「習」羽加白；「慣」心加貫。" },
+          { text: "學習", zhuyin: "ㄒㄩㄝˊ ㄒㄧˊ", clue: "在學校聽課動筆吸取全新的知識技能。", tip: "「學」子字底；「習」上方羽毛等寬。" },
+          { text: "光線", zhuyin: "ㄍㄨㄤ ㄒㄧㄢˋ", clue: "陽光或燈泡散發出來的明亮線條射線。", tip: "「線」糸部加戔。" },
+          { text: "希望", zhuyin: "ㄒㄧ ㄨㄤˋ", clue: "心裡強烈期盼能實現的願望目標。", tip: "「希」爻加巾；「望」亡月王。" },
+          { text: "時候", zhuyin: "ㄕˊ ㄏㄡˋ", clue: "特定的那一瞬間時刻。", tip: "「候」中間有直豎（丨）！" },
+          { text: "卻是", zhuyin: "ㄑㄩㄝˋ ㄕˋ", clue: "轉折語氣，表示事實竟然是另外一回事。", tip: "「卻」去加卩；「是」日加疋。" },
+          { text: "知識", zhuyin: "ㄓ ㄕˋ", clue: "透過讀書觀察所累積的真理與學問。", tip: "「知」矢加口；「識」言加戠。" },
+          { text: "知道", zhuyin: "ㄓ ㄉㄠˋ", clue: "心裡已經清楚明瞭這件事情。", tip: "「知」左矢右口；「道」辵部加首。" },
+          { text: "放晴", zhuyin: "ㄈㄤˋ ㄑㄧㄥˊ", clue: "下了一整天大雨後太陽終於破雲而出。", tip: "「晴」日字旁加青。" },
+          { text: "熟悉", zhuyin: "ㄕㄡˊ ㄒㄧ", clue: "非常了解認得，一點都不陌生生疏。", tip: "「熟」享加丸加四點火；「悉」采加心。" },
+          { text: "讓自己開心", zhuyin: "ㄖㄤˋ ㄗˋ ㄐㄧˇ ㄎㄞ ㄒㄧㄣ", clue: "尋找自己熱愛的事物讓心情放鬆歡笑。", tip: "「讓」言加襄；「己」不要封口寫成已！" },
+          { text: "不熟", zhuyin: "ㄅㄨˋ ㄕㄡˊ", clue: "第一次見面還不太認識，或者肉還沒煮透。", tip: "「熟」下方是四點火。" }
+        ]
+      },
+      "U11": {
+        bossName: "變色幻象蜥",
+        maxHp: 750,
+        fallbackIcon: "🦎",
+        sprites: { idle: "assets/clock_idle.png", hurt: "assets/clock_idle.png", shield: "assets/clock_idle.png" },
+        words: [
+          { text: "快樂", zhuyin: "ㄎㄨㄞˋ ㄌㄜˋ", clue: "臉上笑開懷、心情超級愉悅放鬆。", tip: "「快」心字旁加夬；「樂」白字底加木。" },
+          { text: "躲貓貓", zhuyin: "ㄉㄨㄛˇ ㄇㄠ ㄇㄠ", clue: "一個矇住眼睛數數、其他人藏起來的捉迷藏遊戲。", tip: "「躲」身字旁加朵；「貓」豸字旁加苗。" },
+          { text: "放棄", zhuyin: "ㄈㄤˋ ㄑㄧˋ", clue: "遇到挫折不再堅持、直接丟在一旁退出。", tip: "「棄」育字頭加木。" },
+          { text: "現在", zhuyin: "ㄒㄧㄢˋ ㄗㄞˋ", clue: "正處於的這個當下時刻，非過去非未來。", tip: "「在」土字旁，橫豎穿插。" },
+          { text: "衣服", zhuyin: "ㄧ ㄈㄨˊ", clue: "穿在身上遮蔽保暖的襯衫褲子外衣。", tip: "「服」月字旁加卩又。" },
+          { text: "享受", zhuyin: "ㄒㄧㄤˇ ㄕㄡˋ", clue: "舒服地體會美味食物或優美音樂。", tip: "「享」高字頭加子；「受」爪加又。" },
+          { text: "風景", zhuyin: "ㄈㄥ ㄐㄧㄥˇ", clue: "大自然山川湖泊映入眼簾的美麗景致。", tip: "「景」日字頭加京。" },
+          { text: "新舊", zhuyin: "ㄒㄧㄣ ㄐㄧㄡˋ", clue: "剛買來的新品與用了很久的舊東西對比。", tip: "「舊」佳字頭下加臼。" },
+          { text: "轉學生", zhuyin: "ㄓㄨㄢˇ ㄒㄩㄝˊ ㄕㄥ", clue: "從別間學校轉過來我們班就讀的新同學。", tip: "「轉」車字旁加專。" },
+          { text: "路口", zhuyin: "ㄌㄨˋ ㄎㄡˇ", clue: "兩條馬路十字交會穿越的地點。", tip: "「路」足加各；「口」方正封閉。" },
+          { text: "冷氣", zhuyin: "ㄌㄥˇ ㄑㄧˋ", clue: "夏天開啟降低室內悶熱氣溫的空調機器。", tip: "「冷」兩點水加令。" },
+          { text: "朋友", zhuyin: "ㄆㄥˊ ㄧㄡˇ", clue: "互相扶持陪伴、一同玩耍讀書的夥伴好友。", tip: "「朋」雙月並列；「友」左撇橫撇加捺。" },
+          { text: "現在", zhuyin: "ㄒㄧㄢˋ ㄗㄞˋ", clue: "眼前的當下時段。", tip: "「現」王加見；「在」手土結合。" },
+          { text: "衣服", zhuyin: "ㄧ ㄈㄨˊ", clue: "外出穿著的保暖衣裳。", tip: "「衣」點橫撇豎提撇捺。" },
+          { text: "冷靜", zhuyin: "ㄌㄥˇ ㄐㄧㄥˋ", clue: "深呼吸一口氣、不慌亂不發脾氣沈穩思考。", tip: "「靜」左青右爭。" }
+        ]
+      },
+      "U12": {
+        bossName: "迷宮黃金領主",
+        maxHp: 850,
+        fallbackIcon: "👑",
+        sprites: { idle: "assets/clock_idle.png", hurt: "assets/clock_idle.png", shield: "assets/clock_idle.png" },
+        words: [
+          { text: "袖子", zhuyin: "ㄒㄧㄡˋ ˙ㄗ", clue: "長袖或短袖上衣遮蓋手臂的筒狀部分。", tip: "「袖」是衣字旁（衤）！" },
+          { text: "只要", zhuyin: "ㄓˇ ㄧㄠˋ", clue: "只要達成這個唯一前提條件就能成功。", tip: "「只」口加八；「要」西加女。" },
+          { text: "轉身", zhuyin: "ㄓㄨㄢˇ ㄕㄣ", clue: "原地迴轉一百八十度面向後方。", tip: "「身」撇橫折鉤兩橫撇。" },
+          { text: "功臣", zhuyin: "ㄍㄨㄥ ㄔㄣˊ", clue: "立下偉大功績貢獻、受到大家表揚的人。", tip: "「功」工加力；「臣」外框對齊方整。" },
+          { text: "取消", zhuyin: "ㄑㄩˇ ㄒㄧㄠ", clue: "把原本預定好的行程宣告廢除不辦了。", tip: "「取」耳加又；「消」水加肖。" },
+          { text: "認為", zhuyin: "ㄖㄣˋ ㄨㄟˊ", clue: "在心裡根據事實推斷下結論。", tip: "「認」言加刃；「為」上爪下橫撇點點點點。" },
+          { text: "大臣", zhuyin: "ㄉㄚˋ ㄔㄣˊ", clue: "在皇宮輔佐國王商討國家大事的高官。", tip: "「臣」內部結構不要畫成日！" },
+          { text: "密集", zhuyin: "ㄇㄧˋ ㄐㄧˊ", clue: "事物聚集排得非常緊密、毫無空隙。", tip: "「密」山加宓；「集」隹加木。" },
+          { text: "趕緊", zhuyin: "ㄍㄢˇ ㄐㄧㄣˇ", clue: "動作超級迅速麻利，爭分奪秒。", tip: "「趕」走加旱；「緊」臤加糸。" },
+          { text: "點心", zhuyin: "ㄉㄧㄢˇ ㄒㄧㄣ", clue: "下午三點肚子咕嚕嚕時吃的甜品蛋糕。", tip: "「點」黑加占。" },
+          { text: "王國", zhuyin: "ㄨㄤˊ ㄍㄨㄛˊ", clue: "由國王統治領導的古老奇幻國度。", tip: "「王」三橫一豎；「國」口包或。" },
+          { text: "分享", zhuyin: "ㄈㄣ ㄒㄧㄤˇ", clue: "把心愛的玩具或好吃的零食分給好朋友。", tip: "「分」八加刀；「享」高字頭加子。" },
+          { text: "雲朵", zhuyin: "ㄩㄣˊ ㄉㄨㄛˇ", clue: "飄浮在蔚藍天空中像棉花糖一樣的白雲。", tip: "「雲」雨字頭加云；「朵」几加木。" },
+          { text: "消失", zhuyin: "ㄒㄧㄠ ㄕ", clue: "原本存在的物體慢慢隱形不見了。", tip: "「消」三點水加肖；「失」撇橫撇捺。" },
+          { text: "喜愛", zhuyin: "ㄒㄧˇ ㄞˋ", clue: "內心深深珍愛著這件事物。", tip: "「愛」爪字頭加冖友心。" },
+          { text: "渴望", zhuyin: "ㄎㄜˇ ㄨㄤˋ", clue: "內心極度渴求盼望能獲得某樣東西。", tip: "「渴」水字旁加曷。" },
+          { text: "計謀", zhuyin: "ㄐㄧˋ ㄇㄡˊ", clue: "為了達成作戰勝利而縝密策劃的計策。", tip: "「謀」言字旁加某。" }
+        ]
+      },
+      "U13": {
+        bossName: "終焉幻彩巨龍",
+        maxHp: 850,
+        fallbackIcon: "🐉",
+        sprites: { idle: "assets/clock_idle.png", hurt: "assets/clock_idle.png", shield: "assets/clock_idle.png" },
+        words: [
+          { text: "原因", zhuyin: "ㄩㄢˊ ㄧㄣ", clue: "導致事情演變成這樣的前因後果由來。", tip: "「原」厂加泉省；「因」口包大。" },
+          { text: "一點都不難", zhuyin: "ㄧ ㄉㄧㄢˇ ㄉㄡ ㄅㄨˋ ㄋㄢˊ", clue: "題目超輕鬆、毫不費力就能解開答案。", tip: "「都」者加阝；「難」又加隹。" },
+          { text: "什麼", zhuyin: "ㄕㄣˊ ˙ㄇㄜ", clue: "用來詢問未知事物名稱的疑問詞語。", tip: "「什」人加十；「麼」麻加么。" },
+          { text: "舞蹈", zhuyin: "ㄨˇ ㄉㄠˇ", clue: "跟隨節奏律動踏出優美的步伐肢體動作。", tip: "「舞」四橫四豎撇折加舛；「導」道加寸。" },
+          { text: "開心", zhuyin: "ㄎㄞ ㄒㄧㄣ", clue: "眉開眼笑、無拘無束的快樂心情。", tip: "「開」門框內部平穩對稱。" },
+          { text: "驚訝", zhuyin: "ㄐㄧㄥ ㄧㄚˋ", clue: "事情超出預料讓人嘴巴張大感到驚奇意外。", tip: "「驚」敬加馬；「訝」言加牙。" },
+          { text: "怎麼辦", zhuyin: "ㄗㄣˇ ˙ㄇㄜ ㄅㄢˋ", clue: "突發狀況不知道該如何應對的著急問句。", tip: "「辦」辛加力加辛。" },
+          { text: "案件", zhuyin: "ㄢˋ ㄐㄧㄢˋ", clue: "偵探或警察負責追查調查的神秘事件。", tip: "「案」安加木；「件」人加牛。" },
+          { text: "華麗", zhuyin: "ㄏㄨㄚˊ ㄌㄧˋ", clue: "宮殿舞台裝飾得金碧輝煌極度亮眼奪目。", tip: "「華」草字頭加化十字底；「麗」鹿字頭加一雙麗角。" },
+          { text: "設備", zhuyin: "ㄕㄜˋ ㄅㄟˋ", clue: "大型工廠或教室裡安裝的專業硬體器材。", tip: "「設」言加殳；「備」注意上半部各部件閉合。" },
+          { text: "驚喜", zhuyin: "ㄐㄧㄥ ㄒㄧˇ", clue: "出乎意料突然收到禮物帶來的狂喜感動。", tip: "「驚」敬加馬；「喜」吉加豆。" },
+          { text: "老鼠", zhuyin: "ㄌㄠˇ ㄕㄨˇ", clue: "長著長長尾巴、動作鬼鬼祟祟的齧齒動物。", tip: "「老」土丿匕；「鼠」臼字頭加鼠爪尾巴。" },
+          { text: "霓虹燈", zhuyin: "ㄋㄧˊ ㄏㄨㄥˊ ㄉㄥ", clue: "夜晚街頭大廈閃爍耀眼的五彩繽紛廣告燈管。", tip: "「霓」雨加兒；「虹」虫加工；「燈」火加登。" },
+          { text: "失敗", zhuyin: "ㄕ ㄅㄞˋ", clue: "挑戰沒有成功，但能從中吸取經驗重新再來。", tip: "「敗」貝字旁加攵。" },
+          { text: "美麗", zhuyin: "ㄇㄟˇ ㄌㄧˋ", clue: "姿態容貌宛如仙境般動人漂亮好看。", tip: "「美」羊大為美。" },
+          { text: "跳舞", zhuyin: "ㄊㄧㄠˋ ㄨˇ", clue: "隨著輕快的旋律高興地踩著拍子擺動身軀。", tip: "「跳」足加兆；「舞」橫劃排列繁多但不可少筆！" },
+          { text: "思念", zhuyin: "ㄙ ㄋㄧㄢˋ", clue: "心裡深深牽掛思念遠方的親人朋友。", tip: "「思」田加心；「念」今加心。" }
+        ]
+      }
+    };
+
+    let curUnitKey = "U01";
+    let wordIdx = 0;
+    let bossHp = 750;
+
+    const bossImgEl = document.getElementById("boss-sprite");
+    const fallbackEl = document.getElementById("boss-fallback");
+
+    function setBossSprite(state = "idle") {
+      const u = UNITS[curUnitKey];
+      const src = u.sprites[state] || u.sprites.idle;
+      bossImgEl.onerror = () => {
+        bossImgEl.classList.add("hidden");
+        fallbackEl.classList.remove("hidden");
+        fallbackEl.textContent = u.fallbackIcon;
+      };
+      bossImgEl.onload = () => {
+        bossImgEl.classList.remove("hidden");
+        fallbackEl.classList.add("hidden");
+      };
+      bossImgEl.src = src;
+    }
+
+    function renderQuest() {
+      const u = UNITS[curUnitKey];
+      const cur = u.words[wordIdx];
+      document.getElementById("quest-stage").textContent = `${wordIdx + 1} / ${u.words.length} 詞`;
+      document.getElementById("target-zhuyin").textContent = cur.zhuyin;
+      document.getElementById("target-clue").textContent = cur.clue;
+      document.getElementById("target-tip").textContent = cur.tip;
+
+      // 動態渲染米字格
+      const charBox = document.getElementById("char-display-box");
+      charBox.innerHTML = "";
+      for (const ch of cur.text) {
+        const box = document.createElement("div");
+        box.className = "w-16 h-16 sm:w-20 sm:h-20 rounded-xl bg-slate-900/90 border-2 border-amber-400/40 flex items-center justify-center relative shadow-[0_0_15px_rgba(245,158,11,0.15)]";
+        box.innerHTML = `
+          <div class="absolute inset-0 pointer-events-none flex items-center"><div class="w-full border-b border-red-500/20 border-dashed"></div></div>
+          <div class="absolute inset-0 pointer-events-none flex justify-center"><div class="h-full border-r border-red-500/20 border-dashed"></div></div>
+          <span class="text-4xl sm:text-5xl font-serif font-black text-amber-300 filter drop-shadow-[0_2px_8px_rgba(245,158,11,0.5)]">${ch}</span>
+        `;
+        charBox.appendChild(box);
+      }
+
+      document.getElementById("box-student-action").classList.remove("hidden");
+      document.getElementById("box-teacher-review").classList.add("hidden");
+    }
+
+    function triggerArcadeStrike(damage, isCrit) {
+      const u = UNITS[curUnitKey];
+      const bossBox = document.getElementById("boss-container");
+      const slashBox = document.getElementById("slash-container");
+      const damageText = document.getElementById("damage-text");
+      const curWord = u.words[wordIdx];
+
+      const slash = document.createElement("div");
+      const deg = isCrit ? "-35deg" : "40deg";
+      slash.style.setProperty("--rot", deg);
+      slash.className = `slash-effect absolute left-1/2 top-1/2 w-64 h-3 -translate-x-1/2 -translate-y-1/2 ${isCrit ? 'bg-gradient-to-r from-yellow-300 via-amber-400 to-red-500 shadow-[0_0_20px_#f59e0b]' : 'bg-gradient-to-r from-sky-300 via-cyan-400 to-blue-500 shadow-[0_0_15px_#38bdf8]'} rounded-full z-20 pointer-events-none`;
+      slashBox.appendChild(slash);
+      setTimeout(() => slash.remove(), 400);
+
+      const rect = bossBox.getBoundingClientRect();
+      spawnParticles(rect.left + rect.width / 2, rect.top + rect.height / 2, isCrit ? 60 : 30, isCrit);
+
+      setBossSprite("hurt");
+      bossBox.classList.remove("boss-idle", "boss-hurt", "boss-shield");
+      void bossBox.offsetWidth;
+      bossBox.classList.add("boss-hurt");
+      audio.playHit(isCrit);
+
+      damageText.textContent = isCrit ? `CRITICAL -${damage}!!` : `-${damage}`;
+      damageText.className = `damage-fly absolute left-1/2 top-1/2 font-black italic text-3xl sm:text-4xl pointer-events-none z-30 font-mono tracking-wider ${isCrit ? 'text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-amber-400 to-red-500 drop-shadow-[0_4px_12px_rgba(245,158,11,0.9)]' : 'text-sky-300 drop-shadow-[0_4px_10px_rgba(56,189,248,0.8)]'}`;
+
+      bossHp = Math.max(0, bossHp - damage);
+      const pct = Math.floor((bossHp / u.maxHp) * 100);
+      document.getElementById("boss-hp-current").textContent = bossHp;
+      document.getElementById("boss-hp-bar").style.width = `${pct}%`;
+      setTimeout(() => {
+        document.getElementById("boss-hp-ghost").style.width = `${pct}%`;
+      }, 250);
+
+      document.getElementById("battle-log").innerHTML = isCrit 
+        ? `<span class="text-amber-400 font-black text-sm">💥【${curWord.text}】字跡極度工整！暴擊重創魔王 -${damage} HP！</span>`
+        : `<span class="text-sky-400 font-bold">⚔️ 符文命中！成功召喚【${curWord.text}】造成 -${damage} 傷害！</span>`;
+
+      setTimeout(() => {
+        setBossSprite("idle");
+        bossBox.classList.remove("boss-hurt");
+        bossBox.classList.add("boss-idle");
+      }, 600);
+
+      if (bossHp <= 0) {
+        setTimeout(() => {
+          audio.playVictory();
+          fallbackEl.classList.remove("hidden");
+          fallbackEl.textContent = "💥";
+          bossImgEl.classList.add("hidden");
+          document.getElementById("battle-log").innerHTML = `<span class="text-amber-300 font-black text-base tracking-wider">👑 VICTORY！全數擊破！魔王徹底瓦解！</span>`;
+        }, 500);
+      } else {
+        wordIdx = (wordIdx + 1) % u.words.length;
+        setTimeout(renderQuest, 1000);
+      }
+    }
+
+    function triggerShieldBlock() {
+      const bossBox = document.getElementById("boss-container");
+      setBossSprite("shield");
+      bossBox.classList.remove("boss-idle", "boss-hurt", "boss-shield");
+      void bossBox.offsetWidth;
+      bossBox.classList.add("boss-shield");
+      audio.playShield();
+
+      const damageText = document.getElementById("damage-text");
+      damageText.textContent = `BLOCK! 0`;
+      damageText.className = `damage-fly absolute left-1/2 top-1/2 font-black italic text-2xl text-slate-400 pointer-events-none z-30 font-mono tracking-wider drop-shadow-[0_2px_8px_rgba(148,163,184,0.8)]`;
+
+      document.getElementById("battle-log").innerHTML = `<span class="text-rose-400 font-bold">🛡️ 筆劃有小瑕疵，魔王舉盾防禦！請對照螢幕上的紅格，在紙上重新修整！</span>`;
+
+      setTimeout(() => {
+        setBossSprite("idle");
+        bossBox.classList.remove("boss-shield");
+        bossBox.classList.add("boss-idle");
+      }, 700);
+    }
+
+    document.getElementById("btn-reveal-answer").addEventListener("click", () => {
+      document.getElementById("box-student-action").classList.add("hidden");
+      document.getElementById("box-teacher-review").classList.remove("hidden");
+      document.getElementById("battle-log").innerHTML = `請老師核對紙上的字形與筆劃結構！`;
+    });
+
+    document.getElementById("btn-judge-fail").addEventListener("click", triggerShieldBlock);
+    document.getElementById("btn-judge-pass").addEventListener("click", () => triggerArcadeStrike(50, false));
+    document.getElementById("btn-judge-crit").addEventListener("click", () => triggerArcadeStrike(80, true));
+
+    // 下拉選單切換關卡
+    document.getElementById("unit-selector").addEventListener("change", (e) => {
+      curUnitKey = e.target.value;
+      const u = UNITS[curUnitKey];
+      wordIdx = 0;
+      bossHp = u.maxHp;
+      document.getElementById("boss-name").textContent = u.bossName;
+      document.getElementById("boss-hp-current").textContent = bossHp;
+      document.getElementById("boss-hp-max").textContent = u.maxHp;
+      document.getElementById("boss-hp-bar").style.width = "100%";
+      document.getElementById("boss-hp-ghost").style.width = "100%";
+      setBossSprite("idle");
+      renderQuest();
+    });
+
+    // 初始化載入
+    setBossSprite("idle");
+    renderQuest();
+  </script>
+</body>
+</html>
